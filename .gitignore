@@ -1,0 +1,8 @@
+myenv/
+dist/
+build/
+document/
+extracted_slides/
+extracted_slides_final/
+extracted_slides_optimized/
+Release-25.07.0-0/
