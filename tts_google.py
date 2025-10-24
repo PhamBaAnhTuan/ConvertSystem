@@ -16,13 +16,13 @@ class TextToSpeechGoogle(ctk.CTkFrame):
         self.text_input = ctk.StringVar()
         self.txt_file = ctk.StringVar()
         self.output_path = ctk.StringVar()
-        self.language = ctk.StringVar(value="vi")  # Mặc định tiếng Việt
-        self.speed = ctk.DoubleVar(value=1.0)  # Mặc định tốc độ bình thường
+        self.language = ctk.StringVar(value="vi")
+        self.speed = ctk.DoubleVar(value=1.0)
         self.status = ctk.StringVar(value="Chưa có tác vụ...")
 
         # --- Tiêu đề ---
         ctk.CTkLabel(
-            self, text="🔊 Text → Speech (TTS)", font=("Arial", 20, "bold")
+            self, text="🔊 Text → Speech (Google)", font=("Arial", 20, "bold")
         ).pack(pady=10)
 
         # --- Vùng nhập văn bản ---

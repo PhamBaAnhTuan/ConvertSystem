@@ -7,8 +7,6 @@ from gtts import gTTS
 
 
 class TextToSpeechToolV2(ctk.CTkFrame):
-    """Component: Chuyển file TXT thành nhiều file audio (TTS từng Slide)"""
-
     def __init__(self, master=None):
         super().__init__(master)
         self.pack(fill="both", expand=True, padx=20, pady=20)
@@ -18,70 +16,93 @@ class TextToSpeechToolV2(ctk.CTkFrame):
         self.output_dir = ctk.StringVar()
         self.lang = ctk.StringVar(value="vi")
         self.speed = ctk.DoubleVar(value=1.0)
-        self.status = ctk.StringVar(value="Chưa thực hiện...")
 
         # --- UI chính ---
-        ctk.CTkLabel(
-            self, text="🗣️ Text to Speech (Multi-Slide)", font=("Arial", 18, "bold")
-        ).pack(pady=10)
+        ctk.CTkLabel(self, text="🗣️Text to Speech", font=("Serif", 20, "bold")).pack(
+            pady=10
+        )
 
         # --- Chọn file txt ---
-        frm1 = ctk.CTkFrame(self)
-        frm1.pack(fill="x", pady=10)
-        ctk.CTkLabel(frm1, text="File TXT:").pack(side="left", padx=10)
+        text_file_frame = ctk.CTkFrame(self)
+        text_file_frame.pack(fill="x", pady=10)
+        ctk.CTkLabel(text_file_frame, text="File TXT:").pack(side="left", padx=10)
         ctk.CTkEntry(
-            frm1, textvariable=self.txt_path, placeholder_text="Chọn file .txt..."
+            text_file_frame,
+            textvariable=self.txt_path,
+            placeholder_text="Chọn file .txt...",
+            placeholder_text_color="#888",
         ).pack(side="left", padx=5, fill="x", expand=True)
-        ctk.CTkButton(frm1, text="📂 Browse", command=self.select_txt).pack(
-            side="right", padx=10
-        )
+        ctk.CTkButton(
+            text_file_frame, text="📂 Chọn File", command=self.select_txt
+        ).pack(side="right", padx=10)
 
         # --- Chọn thư mục output ---
-        frm2 = ctk.CTkFrame(self)
-        frm2.pack(fill="x", pady=10)
-        ctk.CTkLabel(frm2, text="Thư mục Output:").pack(side="left", padx=10)
+        output_file_frame = ctk.CTkFrame(self)
+        output_file_frame.pack(fill="x", pady=10)
+        ctk.CTkLabel(output_file_frame, text="Thư mục lưu:").pack(side="left", padx=10)
         ctk.CTkEntry(
-            frm2,
+            output_file_frame,
             textvariable=self.output_dir,
             placeholder_text="Chọn hoặc tạo thư mục audio...",
+            placeholder_text_color="#888",
         ).pack(side="left", padx=5, fill="x", expand=True)
-        ctk.CTkButton(frm2, text="📂 Browse", command=self.select_output).pack(
-            side="right", padx=10
-        )
+        ctk.CTkButton(
+            output_file_frame, text="📂 Chọn thư mục", command=self.select_output
+        ).pack(side="right", padx=10)
 
-        # --- Chọn ngôn ngữ ---
-        frm3 = ctk.CTkFrame(self)
-        frm3.pack(fill="x", pady=10)
-        ctk.CTkLabel(frm3, text="Ngôn ngữ đọc:").pack(side="left", padx=10)
+        # --- Frame chứa ngôn ngữ và tốc độ ---
+        lang_n_speed_frame = ctk.CTkFrame(self)
+        lang_n_speed_frame.pack(fill="x", pady=10)
+
+        # Cấu hình lưới để chia bố cục đẹp
+        lang_n_speed_frame.grid_columnconfigure(0, weight=1)
+        lang_n_speed_frame.grid_columnconfigure(1, weight=1)
+        lang_n_speed_frame.grid_columnconfigure(2, weight=1)
+        lang_n_speed_frame.grid_columnconfigure(3, weight=1)
+
+        # --- Ngôn ngữ ---
+        ctk.CTkLabel(lang_n_speed_frame, text="Ngôn ngữ đọc:").grid(
+            row=0, column=0, padx=10, sticky="w"
+        )
         ctk.CTkOptionMenu(
-            frm3,
+            lang_n_speed_frame,
             values=["vi", "en", "fr", "ja", "zh-cn"],
             variable=self.lang,
-        ).pack(side="left", padx=5)
+        ).grid(row=0, column=1, padx=5, sticky="w")
 
-        # --- Thanh trượt tốc độ ---
-        speed_frame = ctk.CTkFrame(self)
-        speed_frame.pack(pady=10)
-        ctk.CTkLabel(speed_frame, text="🎚️ Tốc độ nói:").grid(row=0, column=0, padx=10)
-        self.speed_slider = ctk.CTkSlider(
-            speed_frame, from_=0.5, to=2.0, number_of_steps=15, variable=self.speed
+        # --- Tốc độ ---
+        ctk.CTkLabel(lang_n_speed_frame, text="🎚️ Tốc độ nói:").grid(
+            row=0, column=2, padx=10, sticky="e"
         )
-        self.speed_slider.grid(row=0, column=1, padx=10)
-        self.speed_label = ctk.CTkLabel(speed_frame, text="1.0x")
-        self.speed_label.grid(row=0, column=2)
+
+        self.speed_slider = ctk.CTkSlider(
+            lang_n_speed_frame,
+            from_=0.5,
+            to=2.0,
+            number_of_steps=15,
+            variable=self.speed,
+        )
+        self.speed_slider.grid(row=0, column=3, padx=10, sticky="ew")
+
+        # --- Nhãn hiển thị tốc độ ---
+        self.speed_label = ctk.CTkLabel(lang_n_speed_frame, text="1.0x")
+        self.speed_label.grid(row=0, column=4, padx=10, sticky="w")
+
+        # Cập nhật nhãn khi kéo slider
         self.speed_slider.configure(
             command=lambda v: self.speed_label.configure(text=f"{float(v):.1f}x")
         )
 
         # --- Log box ---
-        self.log_box = ctk.CTkTextbox(self, height=150)
+        self.log_box = ctk.CTkTextbox(self, height=100)
         self.log_box.pack(fill="both", expand=True, pady=10)
+        self.log(
+            "📢 Lưu ý, File TXT phải có cấu trúc: \nSlide n: Tiêu đề slide n \n<Nội dung slide n>"
+        )
 
         # --- Nút thực thi ---
-        ctk.CTkButton(
-            self, text="▶️ Chuyển TXT → Audio Slides", command=self.run_tts
-        ).pack(pady=10)
-        ctk.CTkLabel(self, textvariable=self.status, text_color="gray").pack(pady=5)
+        ctk.CTkButton(self, text="▶️ Tạo Audio", command=self.run_tts).pack(pady=10)
+        # ctk.CTkLabel(self, textvariable=self.status, text_color="gray").pack(pady=5)
 
     # ==============================
     # 🗂️ Chọn file và thư mục
@@ -92,11 +113,18 @@ class TextToSpeechToolV2(ctk.CTkFrame):
         )
         if path:
             self.txt_path.set(path)
+            self.log("✅ Đã chọn file TXT.")
+            output_dir = os.path.join(os.path.dirname(path), "audio")
+            self.output_dir.set(output_dir)
+            self.log(
+                f"✅ Thư mục lưu audio tương tự đã được điền.{self.output_dir.get()}"
+            )
 
     def select_output(self):
-        folder = filedialog.askdirectory(title="Chọn thư mục Output")
+        folder = filedialog.askdirectory(title="Thư mục lưu:")
         if folder:
             self.output_dir.set(folder)
+            self.log("✅ Đã chọn thư mục lưu.")
 
     # ==============================
     # ▶️ Chạy TTS
@@ -124,7 +152,7 @@ class TextToSpeechToolV2(ctk.CTkFrame):
     # ==============================
     def _tts_thread(self, txt_path, out_dir, lang, speed):
         try:
-            self.status.set("⏳ Đang xử lý file...")
+            self.log("⏳ Đang xử lý file...")
             self.log_box.delete("1.0", "end")
 
             with open(txt_path, "r", encoding="utf-8") as f:
@@ -143,7 +171,6 @@ class TextToSpeechToolV2(ctk.CTkFrame):
 
             if not slide_data:
                 self.log("❌ Không tìm thấy định dạng 'Slide n:' trong file.")
-                self.status.set("❌ Không có slide hợp lệ.")
                 return
 
             self.log(f"📄 Phát hiện {len(slide_data)} slides.")
@@ -167,14 +194,9 @@ class TextToSpeechToolV2(ctk.CTkFrame):
                     self.log(f"❌ Lỗi slide {num}: {e}")
                     continue
 
-            self.status.set("✅ Hoàn tất tạo audio.")
             self.log(f"✅ Hoàn tất! Đã lưu {len(slide_data)} file trong: {out_dir}")
-            messagebox.showinfo(
-                "Thành công", f"Đã tạo {len(slide_data)} file audio tại:\n{out_dir}"
-            )
 
         except Exception as e:
-            self.status.set("❌ Lỗi khi xử lý.")
             self.log(f"❌ Lỗi: {e}")
 
     # ==============================

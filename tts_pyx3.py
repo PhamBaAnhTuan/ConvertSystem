@@ -6,8 +6,6 @@ from tkinter import filedialog, messagebox
 
 
 class TextToSpeechPyx3(ctk.CTkFrame):
-    """Component: Chuyển đổi văn bản hoặc file .txt thành giọng nói"""
-
     def __init__(self, master=None):
         super().__init__(master)
         self.pack(fill="both", expand=True, padx=20, pady=20)
@@ -23,7 +21,7 @@ class TextToSpeechPyx3(ctk.CTkFrame):
 
         # --- Tiêu đề ---
         ctk.CTkLabel(
-            self, text="🗣️ Text → Speech (TTS)", font=("Arial", 20, "bold")
+            self, text="🗣️ Text → Speech (Pyx3)", font=("Arial", 20, "bold")
         ).pack(pady=10)
 
         # --- Vùng nhập văn bản ---
