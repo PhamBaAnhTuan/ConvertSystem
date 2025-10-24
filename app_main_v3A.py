@@ -3,6 +3,8 @@ from customtkinter import filedialog, CTkScrollableFrame
 import os, re, sys, pypandoc, asyncio, edge_tts, threading
 from pdf2image import convert_from_path
 
+from mp4_maker_v2 import make_video_from_slide_audio
+
 # ----------------------------------------------------------------------------------
 # KHỐI CODE XỬ LÝ POPPLER (ĐƯỢC ĐIỀU CHỈNH ĐỂ TÌM TRONG THƯ MỤC CHẠY CỦA EXE)
 # ----------------------------------------------------------------------------------
@@ -11,7 +13,7 @@ POPPLER_BIN_DIR = None
 # Tên thư mục gốc của Poppler mà bạn sẽ copy vào thư mục dist/
 POPPLER_ROOT_DIR_NAME = "poppler-25.07.0"
 
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
     # Lấy đường dẫn thư mục hiện tại nơi EXE đang chạy (dist/AutoTeachingTool/)
     base_path = os.path.abspath(os.path.dirname(sys.executable))
 
@@ -34,20 +36,22 @@ if getattr(sys, 'frozen', False):
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
+
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Công Cụ Tự Động Hóa Giảng Dạy (v3.1)")
-        self.geometry("880x720")
+        self.geometry("880x500")
 
-        self.tabview = ctk.CTkTabview(self, width=860, height=700)
+        self.tabview = ctk.CTkTabview(self, width=860, height=500)
         self.tabview.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
 
         self.tabview.add("1. Markdown -> DOCX")
-        self.tabview.add("2. Text -> Audio (TTS)")
+        self.tabview.add("2. Text -> Speech (TTS)")
         self.tabview.add("3. Rename Slide Images")
         self.tabview.add("4. Tạo Video (Video Builder)")
         self.tabview.add("5. PDF -> Images (Slide Extractor)")
+        self.tabview.add("5. Video maker")
 
         for name in self.tabview._tab_dict.keys():
             self.tabview.tab(name).grid_columnconfigure(0, weight=1)
@@ -64,7 +68,10 @@ class App(ctk.CTk):
     def select_file(self, entry_var, extension="*"):
         path = filedialog.askopenfilename(
             defaultextension=f".{extension}",
-            filetypes=[(f"{extension.upper()} files", f"*.{extension}"), ("All files", "*.*")]
+            filetypes=[
+                (f"{extension.upper()} files", f"*.{extension}"),
+                ("All files", "*.*"),
+            ],
         )
         if path:
             entry_var.set(path)
@@ -83,27 +90,56 @@ class App(ctk.CTk):
         self.docx_output = ctk.StringVar()
         self.md_status = ctk.StringVar(value="...")
 
+        self.md_input.trace_add("write", self.update_docx_output)
+
         frame = ctk.CTkFrame(tab)
         frame.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(frame, text="File Markdown:").grid(row=0, column=0, padx=10, pady=5)
-        ctk.CTkEntry(frame, textvariable=self.md_input).grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        ctk.CTkButton(frame, text="Browse", command=lambda: self.select_file(self.md_input, "md")).grid(row=0, column=2, padx=10)
+        ctk.CTkLabel(frame, text="File Markdown:").grid(
+            row=0, column=0, padx=10, pady=5
+        )
+        ctk.CTkEntry(frame, textvariable=self.md_input).grid(
+            row=0, column=1, padx=5, pady=5, sticky="ew"
+        )
+        ctk.CTkButton(
+            frame, text="Browse", command=lambda: self.select_file(self.md_input, "md")
+        ).grid(row=0, column=2, padx=10)
 
-        ctk.CTkLabel(frame, text="File DOCX Output:").grid(row=1, column=0, padx=10, pady=5)
-        ctk.CTkEntry(frame, textvariable=self.docx_output).grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-        ctk.CTkButton(frame, text="Browse", command=lambda: self.select_file(self.docx_output, "docx")).grid(row=1, column=2, padx=10)
-
-        self.md_label = ctk.CTkLabel(tab, textvariable=self.md_status, text_color="gray")
+        # Status
+        self.md_label = ctk.CTkLabel(
+            tab, textvariable=self.md_status, text_color="gray"
+        )
         self.md_label.grid(row=1, column=0, padx=20, pady=10, sticky="w")
 
-        ctk.CTkButton(tab, text="▶️ Chuyển Đổi", command=self.run_md).grid(row=2, column=0, pady=10)
+        # ---- OUTPUT FILE DOCX ----
+        ctk.CTkLabel(frame, text="File DOCX Output:").grid(
+            row=1, column=0, padx=10, pady=5
+        )
+        ctk.CTkEntry(frame, textvariable=self.docx_output).grid(
+            row=1, column=1, padx=10, pady=5, sticky="ew"
+        )
+        # ---- BUTTON CONVERT ----
+        ctk.CTkButton(tab, text="▶️ Chuyển Đổi", command=self.run_md).grid(
+            row=2, column=0, pady=10
+        )
+
+    def update_docx_output(self, *args):
+        md_path = self.md_input.get().strip()
+        if not md_path:
+            # nếu chưa nhập gì -> để trống output
+            self.docx_output.set("")
+            return
+        if md_path.lower().endswith(".md"):
+            docx_path = md_path[:-3] + ".docx"
+        else:
+            docx_path = md_path + ".docx"
+        self.docx_output.set(docx_path)
 
     def run_md(self):
         src, dst = self.md_input.get(), self.docx_output.get()
         if not os.path.exists(src):
-            self.md_status.set("❌ File không tồn tại!")
+            self.md_status.set("❌ File Markdown không tồn tại!")
             return
         threading.Thread(target=self._md_thread, args=(src, dst)).start()
 
@@ -111,7 +147,9 @@ class App(ctk.CTk):
         try:
             with open(src, encoding="utf-8") as f:
                 txt = f.read().replace("$$$", "$$")
-            pypandoc.convert_text(txt, "docx", "markdown+tex_math_dollars", outputfile=dst)
+            pypandoc.convert_text(
+                txt, "docx", "markdown+tex_math_dollars", outputfile=dst
+            )
             self.md_status.set(f"✅ Đã lưu: {dst}")
         except Exception as e:
             self.md_status.set(f"❌ Lỗi Pandoc/Chuyển đổi: {e}")
@@ -121,65 +159,110 @@ class App(ctk.CTk):
     # ============================================================
     VOICES = {
         # --- TIẾNG VIỆT (VIETNAMESE) ---
-        "VN - Hoai My (Nữ, Tự nhiên)": 'vi-VN-HoaiMyNeural',
-        "VN - Hoai An (Nữ, Miền Bắc)": 'vi-VN-HoaiAnNeural',
-        "VN - Hoai Bao (Nữ, Miền Trung)": 'vi-VN-HoaiBaoNeural',
-        "VN - Hoai Suong (Nữ, Miền Nam)": 'vi-VN-HoaiSuongNeural',
-        "VN - Nam Minh (Nam, Chuẩn Bắc)": 'vi-VN-NamMinhNeural',
-
+        "VN - Hoai My (Nữ, Tự nhiên)": "vi-VN-HoaiMyNeural",
+        "VN - Hoai An (Nữ, Miền Bắc)": "vi-VN-HoaiAnNeural",
+        "VN - Hoai Bao (Nữ, Miền Trung)": "vi-VN-HoaiBaoNeural",
+        "VN - Hoai Suong (Nữ, Miền Nam)": "vi-VN-HoaiSuongNeural",
+        "VN - Nam Minh (Nam, Chuẩn Bắc)": "vi-VN-NamMinhNeural",
         # --- TIẾNG ANH (ENGLISH) ---
-        "EN - Jenny (Nữ, US)": 'en-US-JennyNeural',
-        "EN - Libby (Nữ, UK)": 'en-GB-LibbyNeural',
-        "EN - Guy (Nam, US)": 'en-US-GuyNeural',
-        "EN - Ryan (Nam, UK)": 'en-GB-RyanNeural',
+        "EN - Jenny (Nữ, US)": "en-US-JennyNeural",
+        "EN - Libby (Nữ, UK)": "en-GB-LibbyNeural",
+        "EN - Guy (Nam, US)": "en-US-GuyNeural",
+        "EN - Ryan (Nam, UK)": "en-GB-RyanNeural",
     }
 
     def setup_tts_tab(self):
-        tab = self.tabview.tab("2. Text -> Audio (TTS)")
+        tab = self.tabview.tab("2. Text -> Speech (TTS)")
         self.tts_input = ctk.StringVar()
-        self.tts_voice = ctk.StringVar(value="VN - Hoai My (Nữ, Tự nhiên)") # <-- GIÁ TRỊ MẶC ĐỊNH
+        self.tts_voice = ctk.StringVar(
+            value="VN - Hoai My (Nữ, Tự nhiên)"
+        )  # <-- GIÁ TRỊ MẶC ĐỊNH
         self.tts_log = ctk.CTkTextbox(tab, height=200)
 
         # --- Thiết lập giá trị mặc định ---
-        self.tts_rate = ctk.IntVar(value=5)      # <-- MẶC ĐỊNH +5%
-        self.tts_pitch = ctk.IntVar(value=10)    # <-- MẶC ĐỊNH +10Hz
+        self.tts_rate = ctk.IntVar(value=5)  # <-- MẶC ĐỊNH +5%
+        self.tts_pitch = ctk.IntVar(value=10)  # <-- MẶC ĐỊNH +10Hz
         self.tts_volume = ctk.IntVar(value=100)  # <-- MẶC ĐỊNH +100%
 
         input_frame = ctk.CTkFrame(tab)
         input_frame.grid(row=0, column=0, padx=20, pady=10, sticky="ew", columnspan=3)
         input_frame.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(input_frame, text="File Script (.txt):").grid(row=0, column=0, padx=10, pady=5, sticky="w")
-        ctk.CTkEntry(input_frame, textvariable=self.tts_input).grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        ctk.CTkButton(input_frame, text="Browse", command=lambda: self.select_file(self.tts_input, "txt")).grid(row=0, column=2, padx=10)
+        ctk.CTkLabel(input_frame, text="File Script (.txt):").grid(
+            row=0, column=0, padx=10, pady=5, sticky="w"
+        )
+        ctk.CTkEntry(input_frame, textvariable=self.tts_input).grid(
+            row=0, column=1, padx=5, pady=5, sticky="ew"
+        )
+        ctk.CTkButton(
+            input_frame,
+            text="Browse",
+            command=lambda: self.select_file(self.tts_input, "txt"),
+        ).grid(row=0, column=2, padx=10)
 
-        ctk.CTkLabel(input_frame, text="Giọng đọc:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
-        ctk.CTkComboBox(input_frame, variable=self.tts_voice, values=list(self.VOICES.keys())).grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
+        ctk.CTkLabel(input_frame, text="Giọng đọc:").grid(
+            row=1, column=0, padx=10, pady=5, sticky="w"
+        )
+        ctk.CTkComboBox(
+            input_frame, variable=self.tts_voice, values=list(self.VOICES.keys())
+        ).grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
 
         config_frame = ctk.CTkFrame(tab)
         config_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew", columnspan=3)
         config_frame.grid_columnconfigure(1, weight=1)
 
         # --- Tốc độ (Rate) ---
-        ctk.CTkLabel(config_frame, text="Tốc độ (Rate):").grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(config_frame, text="Tốc độ (Rate):").grid(
+            row=0, column=0, padx=10, pady=5, sticky="w"
+        )
         self.rate_label = ctk.CTkLabel(config_frame, text=f"{self.tts_rate.get():+d}%")
         self.rate_label.grid(row=0, column=2, padx=10, pady=5)
-        ctk.CTkSlider(config_frame, from_=-50, to=50, variable=self.tts_rate, command=lambda v: self.rate_label.configure(text=f"{int(v):+d}%")).grid(row=0, column=1, padx=10, pady=5, sticky="ew")
+        ctk.CTkSlider(
+            config_frame,
+            from_=-50,
+            to=50,
+            variable=self.tts_rate,
+            command=lambda v: self.rate_label.configure(text=f"{int(v):+d}%"),
+        ).grid(row=0, column=1, padx=10, pady=5, sticky="ew")
 
         # --- Cao độ (Pitch) ---
-        ctk.CTkLabel(config_frame, text="Cao độ (Pitch):").grid(row=1, column=0, padx=10, pady=5, sticky="w")
-        self.pitch_label = ctk.CTkLabel(config_frame, text=f"{self.tts_pitch.get():+d}Hz")
+        ctk.CTkLabel(config_frame, text="Cao độ (Pitch):").grid(
+            row=1, column=0, padx=10, pady=5, sticky="w"
+        )
+        self.pitch_label = ctk.CTkLabel(
+            config_frame, text=f"{self.tts_pitch.get():+d}Hz"
+        )
         self.pitch_label.grid(row=1, column=2, padx=10, pady=5)
-        ctk.CTkSlider(config_frame, from_=-50, to=50, variable=self.tts_pitch, command=lambda v: self.pitch_label.configure(text=f"{int(v):+d}Hz")).grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+        ctk.CTkSlider(
+            config_frame,
+            from_=-50,
+            to=50,
+            variable=self.tts_pitch,
+            command=lambda v: self.pitch_label.configure(text=f"{int(v):+d}Hz"),
+        ).grid(row=1, column=1, padx=10, pady=5, sticky="ew")
 
         # --- Âm lượng (Volume) ---
-        ctk.CTkLabel(config_frame, text="Âm lượng (Volume):").grid(row=2, column=0, padx=10, pady=5, sticky="w")
-        self.volume_label = ctk.CTkLabel(config_frame, text=f"{self.tts_volume.get():+d}%")
+        ctk.CTkLabel(config_frame, text="Âm lượng (Volume):").grid(
+            row=2, column=0, padx=10, pady=5, sticky="w"
+        )
+        self.volume_label = ctk.CTkLabel(
+            config_frame, text=f"{self.tts_volume.get():+d}%"
+        )
         self.volume_label.grid(row=2, column=2, padx=10, pady=5)
-        ctk.CTkSlider(config_frame, from_=0, to=100, variable=self.tts_volume, command=lambda v: self.volume_label.configure(text=f"{int(v):+d}%")).grid(row=2, column=1, padx=10, pady=5, sticky="ew")
+        ctk.CTkSlider(
+            config_frame,
+            from_=0,
+            to=100,
+            variable=self.tts_volume,
+            command=lambda v: self.volume_label.configure(text=f"{int(v):+d}%"),
+        ).grid(row=2, column=1, padx=10, pady=5, sticky="ew")
 
-        ctk.CTkButton(tab, text="▶️ TẠO AUDIO", command=self.run_tts).grid(row=2, column=0, padx=20, pady=10, sticky="w")
-        self.tts_log.grid(row=3, column=0, columnspan=3, padx=20, pady=10, sticky="nsew")
+        ctk.CTkButton(tab, text="▶️ TẠO AUDIO", command=self.run_tts).grid(
+            row=2, column=0, padx=20, pady=10, sticky="w"
+        )
+        self.tts_log.grid(
+            row=3, column=0, columnspan=3, padx=20, pady=10, sticky="nsew"
+        )
         tab.grid_rowconfigure(3, weight=1)
 
     def run_tts(self):
@@ -195,9 +278,14 @@ class App(ctk.CTk):
 
         self.tts_log.delete("1.0", "end")
         self.tts_log.insert("end", f"▶️ Bắt đầu tạo audio...\n")
-        self.tts_log.insert("end", f"⚙️ Voice: {voice} | Rate: {rate} | Pitch: {pitch} | Volume: {volume}\n")
+        self.tts_log.insert(
+            "end",
+            f"⚙️ Voice: {voice} | Rate: {rate} | Pitch: {pitch} | Volume: {volume}\n",
+        )
 
-        threading.Thread(target=self._tts_thread, args=(path, voice, rate, pitch, volume)).start()
+        threading.Thread(
+            target=self._tts_thread, args=(path, voice, rate, pitch, volume)
+        ).start()
 
     def _tts_thread(self, path, voice, rate, pitch, volume):
         outdir = os.path.join(os.path.dirname(path), "audio")
@@ -210,7 +298,8 @@ class App(ctk.CTk):
             slides = []
             for idx, (title, body) in enumerate(matches, start=1):
                 body = body.strip()
-                if not body: continue
+                if not body:
+                    continue
                 slides.append({"index": idx, "title": title.strip(), "body": body})
             return slides
 
@@ -221,7 +310,9 @@ class App(ctk.CTk):
 
                 slides = parse_slides(txt)
 
-                self.tts_log.insert("end", f"🔍 Tìm thấy {len(slides)} slide có nội dung.\n")
+                self.tts_log.insert(
+                    "end", f"🔍 Tìm thấy {len(slides)} slide có nội dung.\n"
+                )
 
                 for s in slides:
                     slide_no = s["index"]
@@ -230,10 +321,12 @@ class App(ctk.CTk):
 
                     self.tts_log.insert("end", f"--- Xử lý Slide {slide_no}...\n")
 
-                    comm = edge_tts.Communicate(text_chunk, voice, rate=rate, pitch=pitch, volume=volume)
+                    comm = edge_tts.Communicate(
+                        text_chunk, voice, rate=rate, pitch=pitch, volume=volume
+                    )
                     await comm.save(outfile)
 
-                    self.tts_log.insert("end", f"  ✅ Thành công: slide_{slide_no}.mp3\n")
+                    self.tts_log.insert("end", f"✅ Thành công: slide_{slide_no}.mp3\n")
 
                 self.tts_log.insert("end", "🎉 Hoàn tất!\n")
 
@@ -248,7 +341,6 @@ class App(ctk.CTk):
 
         asyncio.run(job())
 
-
     # ============================================================
     # --- TAB 3: Rename Images ---
     # ============================================================
@@ -258,13 +350,23 @@ class App(ctk.CTk):
         self.rename_log = ctk.CTkTextbox(tab, height=200)
 
         ctk.CTkLabel(tab, text="Thư mục ảnh:").grid(row=0, column=0, padx=20, pady=5)
-        ctk.CTkEntry(tab, textvariable=self.img_dir, width=400).grid(row=0, column=1, padx=5, pady=5)
-        ctk.CTkButton(tab, text="Browse", command=lambda: self.select_directory(self.img_dir)).grid(row=0, column=2, padx=10)
+        ctk.CTkEntry(tab, textvariable=self.img_dir, width=400).grid(
+            row=0, column=1, padx=5, pady=5
+        )
+        ctk.CTkButton(
+            tab, text="Browse", command=lambda: self.select_directory(self.img_dir)
+        ).grid(row=0, column=2, padx=10)
 
-        ctk.CTkLabel(tab, text="Quy tắc: 'SỐ_TÊN.ĐUÔI' → 'slide-SỐ.ĐUÔI'").grid(row=1, column=0, padx=20, pady=5, sticky="w")
+        ctk.CTkLabel(tab, text="Quy tắc: 'SỐ_TÊN.ĐUÔI' → 'slide-SỐ.ĐUÔI'").grid(
+            row=1, column=0, padx=20, pady=5, sticky="w"
+        )
 
-        ctk.CTkButton(tab, text="▶️ Đổi tên", command=self.rename_images).grid(row=2, column=0, padx=20, pady=10)
-        self.rename_log.grid(row=3, column=0, columnspan=3, padx=20, pady=10, sticky="nsew")
+        ctk.CTkButton(tab, text="▶️ Đổi tên", command=self.rename_images).grid(
+            row=2, column=0, padx=20, pady=10
+        )
+        self.rename_log.grid(
+            row=3, column=0, columnspan=3, padx=20, pady=10, sticky="nsew"
+        )
         tab.grid_rowconfigure(3, weight=1)
 
     def rename_images(self):
@@ -287,9 +389,8 @@ class App(ctk.CTk):
                 except Exception as e:
                     self.rename_log.insert("end", f"❌ Lỗi đổi tên {f}: {e}\n")
             else:
-                 self.rename_log.insert("end", f"⏩ Bỏ qua: {f} (Không khớp quy tắc)\n")
+                self.rename_log.insert("end", f"⏩ Bỏ qua: {f} (Không khớp quy tắc)\n")
         self.rename_log.insert("end", "🎉 Hoàn tất!\n")
-
 
     # ============================================================
     # --- TAB 4: VIDEO BUILDER ---
@@ -306,26 +407,46 @@ class App(ctk.CTk):
         frm.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
         frm.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(frm, text="Thư mục project:").grid(row=0, column=0, padx=10)
-        ctk.CTkEntry(frm, textvariable=self.video_dir).grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        ctk.CTkButton(frm, text="Browse", command=lambda: self.select_directory(self.video_dir)).grid(row=0, column=2, padx=10)
+        ctk.CTkEntry(frm, textvariable=self.video_dir).grid(
+            row=0, column=1, padx=5, pady=5, sticky="ew"
+        )
+        ctk.CTkButton(
+            frm, text="Browse", command=lambda: self.select_directory(self.video_dir)
+        ).grid(row=0, column=2, padx=10)
 
         info = ctk.CTkFrame(tab)
         info.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
         info.grid_columnconfigure(1, weight=1)
         info.grid_columnconfigure(3, weight=1)
 
-        ctk.CTkLabel(info, text="Audio Files:").grid(row=0, column=0, padx=10, pady=5, sticky="w")
-        ctk.CTkLabel(info, textvariable=self.audio_count).grid(row=0, column=1, padx=10, pady=5, sticky="w")
-        ctk.CTkLabel(info, text="Image Files:").grid(row=0, column=2, padx=10, pady=5, sticky="w")
-        ctk.CTkLabel(info, textvariable=self.img_count).grid(row=0, column=3, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(info, text="Audio Files:").grid(
+            row=0, column=0, padx=10, pady=5, sticky="w"
+        )
+        ctk.CTkLabel(info, textvariable=self.audio_count).grid(
+            row=0, column=1, padx=10, pady=5, sticky="w"
+        )
+        ctk.CTkLabel(info, text="Image Files:").grid(
+            row=0, column=2, padx=10, pady=5, sticky="w"
+        )
+        ctk.CTkLabel(info, textvariable=self.img_count).grid(
+            row=0, column=3, padx=10, pady=5, sticky="w"
+        )
 
-        ctk.CTkLabel(info, text="TỔNG SLIDE DỰ KIẾN:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
-        ctk.CTkEntry(info, textvariable=self.slide_count, width=80).grid(row=1, column=1, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(info, text="TỔNG SLIDE DỰ KIẾN:").grid(
+            row=1, column=0, padx=10, pady=5, sticky="w"
+        )
+        ctk.CTkEntry(info, textvariable=self.slide_count, width=80).grid(
+            row=1, column=1, padx=10, pady=5, sticky="w"
+        )
 
         btns = ctk.CTkFrame(tab)
         btns.grid(row=2, column=0, padx=20, pady=10)
-        ctk.CTkButton(btns, text="🔍 Kiểm tra", command=self.check_folders).pack(side="left", padx=10)
-        ctk.CTkButton(btns, text="▶️ Tạo index.html", command=self.create_index).pack(side="left", padx=10)
+        ctk.CTkButton(btns, text="🔍 Kiểm tra", command=self.check_folders).pack(
+            side="left", padx=10
+        )
+        ctk.CTkButton(btns, text="▶️ Tạo index.html", command=self.create_index).pack(
+            side="left", padx=10
+        )
 
         self.video_log.grid(row=3, column=0, padx=20, pady=10, sticky="nsew")
         tab.grid_rowconfigure(3, weight=1)
@@ -341,15 +462,23 @@ class App(ctk.CTk):
         for p in [ad, im]:
             if not os.path.exists(p):
                 os.makedirs(p)
-                self.video_log.insert("end", f"📁 Tạo thư mục con: {os.path.basename(p)}\n")
+                self.video_log.insert(
+                    "end", f"📁 Tạo thư mục con: {os.path.basename(p)}\n"
+                )
 
         mp3 = [f for f in os.listdir(ad) if re.match(r"^slide_\d+\.mp3$", f)]
-        png = [f for f in os.listdir(im) if re.match(r"^slide-\d+\.(png|jpg|jpeg)$", f, re.IGNORECASE)]
+        png = [
+            f
+            for f in os.listdir(im)
+            if re.match(r"^slide-\d+\.(png|jpg|jpeg)$", f, re.IGNORECASE)
+        ]
 
         self.audio_count.set(len(mp3))
         self.img_count.set(len(png))
         self.slide_count.set(max(len(mp3), len(png)))
-        self.video_log.insert("end", f"🔢 Tổng số Slides (max): {self.slide_count.get()}\n")
+        self.video_log.insert(
+            "end", f"🔢 Tổng số Slides (max): {self.slide_count.get()}\n"
+        )
 
     def create_index(self):
         project_dir = self.video_dir.get()
@@ -359,16 +488,18 @@ class App(ctk.CTk):
             self.video_log.insert("end", "❌ Vui lòng chọn thư mục Project hợp lệ\n")
             return
 
-        if getattr(sys, 'frozen', False):
+        if getattr(sys, "frozen", False):
             base_path = sys._MEIPASS
         else:
             base_path = os.path.dirname(__file__)
-
-        template_path = os.path.join(base_path, "index_backup.html")
+        print("base_path", base_path)
+        template_path = os.path.join(base_path, "index_backup1.html")
         output_path = os.path.join(project_dir, "index.html")
 
         if not os.path.exists(template_path):
-            self.video_log.insert("end", f"❌ Không tìm thấy file template: {template_path}\n")
+            self.video_log.insert(
+                "end", f"❌ Không tìm thấy file template: {template_path}\n"
+            )
             self.video_log.insert("end", f"(Debug Path: {base_path})\n")
             return
 
@@ -377,14 +508,26 @@ class App(ctk.CTk):
                 html = f.read()
 
             total = self.slide_count.get()
-            html = re.sub(r"const TOTAL_SLIDES\s*=\s*\d+;", f"const TOTAL_SLIDES = {total};", html)
-            html = re.sub(r"const IMAGE_PREFIX\s*=\s*['\"].*?['\"];", "const IMAGE_PREFIX = 'images/slide-';", html)
-            html = re.sub(r"const AUDIO_PREFIX\s*=\s*['\"].*?['\"];", "const AUDIO_PREFIX = 'audio/slide_';", html)
+            html = re.sub(
+                r"const TOTAL_SLIDES\s*=\s*\d+;", f"const TOTAL_SLIDES = {total};", html
+            )
+            html = re.sub(
+                r"const IMAGE_PREFIX\s*=\s*['\"].*?['\"];",
+                "const IMAGE_PREFIX = 'images/slide_';",
+                html,
+            )
+            html = re.sub(
+                r"const AUDIO_PREFIX\s*=\s*['\"].*?['\"];",
+                "const AUDIO_PREFIX = 'audio/slide_';",
+                html,
+            )
 
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(html)
 
-            self.video_log.insert("end", f"✅ Đã tạo file index.html tại: {output_path}\n")
+            self.video_log.insert(
+                "end", f"✅ Đã tạo file index.html tại: {output_path}\n"
+            )
 
         except Exception as e:
             self.video_log.insert("end", f"❌ Lỗi khi tạo file index.html: {e}\n")
@@ -398,19 +541,32 @@ class App(ctk.CTk):
         self.pdf_log = ctk.CTkTextbox(tab, height=250)
 
         if POPPLER_BIN_DIR is None:
-             ctk.CTkLabel(tab, text="⚠️ Vui lòng cài đặt Poppler hoặc chạy từ file EXE đã đóng gói Poppler.", text_color="orange").grid(row=0, column=0, columnspan=3, padx=20, pady=5, sticky="w")
-             row_offset = 1
+            ctk.CTkLabel(
+                tab,
+                text="⚠️ Vui lòng cài đặt Poppler hoặc chạy từ file EXE đã đóng gói Poppler.",
+                text_color="orange",
+            ).grid(row=0, column=0, columnspan=3, padx=20, pady=5, sticky="w")
+            row_offset = 1
         else:
-             row_offset = 0
+            row_offset = 0
 
-        ctk.CTkLabel(tab, text="File PDF:").grid(row=0 + row_offset, column=0, padx=20, pady=5)
-        ctk.CTkEntry(tab, textvariable=self.pdf_file, width=400).grid(row=0 + row_offset, column=1, padx=5, pady=5)
-        ctk.CTkButton(tab, text="Browse", command=lambda: self.select_file(self.pdf_file, "pdf")).grid(row=0 + row_offset, column=2, padx=10)
+        ctk.CTkLabel(tab, text="File PDF:").grid(
+            row=0 + row_offset, column=0, padx=20, pady=5
+        )
+        ctk.CTkEntry(tab, textvariable=self.pdf_file, width=400).grid(
+            row=0 + row_offset, column=1, padx=5, pady=5
+        )
+        ctk.CTkButton(
+            tab, text="Browse", command=lambda: self.select_file(self.pdf_file, "pdf")
+        ).grid(row=0 + row_offset, column=2, padx=10)
 
-        ctk.CTkButton(tab, text="▶️ Chuyển thành Ảnh", command=self.convert_pdf).grid(row=1 + row_offset, column=0, padx=20, pady=10)
-        self.pdf_log.grid(row=2 + row_offset, column=0, columnspan=3, padx=20, pady=10, sticky="nsew")
+        ctk.CTkButton(tab, text="▶️ Chuyển thành Ảnh", command=self.convert_pdf).grid(
+            row=1 + row_offset, column=0, padx=20, pady=10
+        )
+        self.pdf_log.grid(
+            row=2 + row_offset, column=0, columnspan=3, padx=20, pady=10, sticky="nsew"
+        )
         tab.grid_rowconfigure(2 + row_offset, weight=1)
-
 
     def convert_pdf(self):
         pdf_path = self.pdf_file.get()
@@ -418,9 +574,12 @@ class App(ctk.CTk):
             self.pdf_log.insert("end", "❌ File không tồn tại\n")
             return
 
-        if POPPLER_BIN_DIR is None and not os.environ.get('PATH'):
-             self.pdf_log.insert("end", "❌ Lỗi: Không tìm thấy Poppler. Vui lòng cài đặt Poppler hoặc chạy từ EXE.\n")
-             return
+        if POPPLER_BIN_DIR is None and not os.environ.get("PATH"):
+            self.pdf_log.insert(
+                "end",
+                "❌ Lỗi: Không tìm thấy Poppler. Vui lòng cài đặt Poppler hoặc chạy từ EXE.\n",
+            )
+            return
 
         out_dir = os.path.join(os.path.dirname(pdf_path), "images")
         os.makedirs(out_dir, exist_ok=True)
@@ -429,25 +588,25 @@ class App(ctk.CTk):
         threading.Thread(target=self._pdf_worker, args=(pdf_path, out_dir)).start()
 
     def _pdf_worker(self, pdf_path, out_dir):
-            try:
-                pages = convert_from_path(pdf_path, dpi=200, poppler_path=POPPLER_BIN_DIR)
+        try:
+            pages = convert_from_path(pdf_path, dpi=200, poppler_path=POPPLER_BIN_DIR)
 
-                self.pdf_log.insert("end", f"🔍 Tổng số trang: {len(pages)}\n")
-                for i, page in enumerate(pages, 1):
-                    out_file = os.path.join(out_dir, f"slide-{i}.png")
-                    page.save(out_file, "PNG")
-                    self.pdf_log.insert("end", f"✅ Trang {i} -> {out_file}\n")
+            self.pdf_log.insert("end", f"🔍 Tổng số trang: {len(pages)}\n")
+            for i, page in enumerate(pages, 1):
+                out_file = os.path.join(out_dir, f"slide-{i}.png")
+                page.save(out_file, "PNG")
+                self.pdf_log.insert("end", f"✅ Trang {i} -> {out_file}\n")
 
-                self.pdf_log.insert("end", "🎉 Hoàn tất!\n")
+            self.pdf_log.insert("end", "🎉 Hoàn tất!\n")
 
-            except Exception as e:
-                error_msg = f"❌ Lỗi: Không thể chuyển đổi PDF.\nChi tiết: {e}"
-                if 'No such file or directory' in str(e) and POPPLER_BIN_DIR is not None:
-                    error_msg += f"\n👉 Lỗi Poppler: Hãy đảm bảo bạn đã copy thư mục '{POPPLER_ROOT_DIR_NAME}' vào cùng cấp với file EXE."
-                elif 'No such file or directory' in str(e):
-                     error_msg += "\n👉 Lỗi Poppler: Hãy đảm bảo Poppler đã được cài đặt và thêm vào PATH."
+        except Exception as e:
+            error_msg = f"❌ Lỗi: Không thể chuyển đổi PDF.\nChi tiết: {e}"
+            if "No such file or directory" in str(e) and POPPLER_BIN_DIR is not None:
+                error_msg += f"\n👉 Lỗi Poppler: Hãy đảm bảo bạn đã copy thư mục '{POPPLER_ROOT_DIR_NAME}' vào cùng cấp với file EXE."
+            elif "No such file or directory" in str(e):
+                error_msg += "\n👉 Lỗi Poppler: Hãy đảm bảo Poppler đã được cài đặt và thêm vào PATH."
 
-                self.pdf_log.insert("end", error_msg + "\n")
+            self.pdf_log.insert("end", error_msg + "\n")
 
 
 if __name__ == "__main__":

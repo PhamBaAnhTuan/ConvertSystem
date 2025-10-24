@@ -1,7 +1,10 @@
-myenv/
+.venv/
 dist/
 build/
 document/
+assets/
+__pycache__/
+*.pyc
 extracted_slides/
 extracted_slides_final/
 extracted_slides_optimized/
