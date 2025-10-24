@@ -17,7 +17,7 @@ class TextToSpeechGoogle(ctk.CTkFrame):
         self.txt_file = ctk.StringVar()
         self.output_path = ctk.StringVar()
         self.language = ctk.StringVar(value="vi")  # Mặc định tiếng Việt
-        self.speed = ctk.StringVar(value="1.0")  # Mặc định tốc độ bình thường
+        self.speed = ctk.DoubleVar(value=1.0)  # Mặc định tốc độ bình thường
         self.status = ctk.StringVar(value="Chưa có tác vụ...")
 
         # --- Tiêu đề ---
@@ -43,18 +43,30 @@ class TextToSpeechGoogle(ctk.CTkFrame):
             file_frame, text="📂 Chọn File", command=self.select_txt_file
         ).pack(side="right", padx=10)
 
-        # --- Dòng chọn ngôn ngữ & tốc độ ---
+        # --- Lựa chọn ngôn ngữ ---
         lang_frame = ctk.CTkFrame(self)
         lang_frame.pack(pady=10)
-        ctk.CTkLabel(lang_frame, text="Ngôn ngữ:").grid(row=0, column=0, padx=5)
-        ctk.CTkEntry(lang_frame, textvariable=self.language, width=80).grid(
-            row=0, column=1, padx=5
+        ctk.CTkLabel(lang_frame, text="🌍 Chọn ngôn ngữ:").grid(
+            row=0, column=0, padx=10
         )
-        ctk.CTkLabel(lang_frame, text="Tốc độ (0.5 - 2.0):").grid(
-            row=0, column=2, padx=5
+        lang_menu = ctk.CTkOptionMenu(
+            lang_frame,
+            variable=self.language,
+            values=["vi", "en", "ja", "ko", "fr", "de", "zh-CN"],
         )
-        ctk.CTkEntry(lang_frame, textvariable=self.speed, width=80).grid(
-            row=0, column=3, padx=5
+        lang_menu.grid(row=0, column=1, padx=10)
+        # --- Thanh trượt tốc độ ---
+        speed_frame = ctk.CTkFrame(self)
+        speed_frame.pack(pady=10)
+        ctk.CTkLabel(speed_frame, text="🎚️ Tốc độ nói:").grid(row=0, column=0, padx=10)
+        self.speed_slider = ctk.CTkSlider(
+            speed_frame, from_=0.5, to=2.0, number_of_steps=15, variable=self.speed
+        )
+        self.speed_slider.grid(row=0, column=1, padx=10)
+        self.speed_label = ctk.CTkLabel(speed_frame, text="1.0x")
+        self.speed_label.grid(row=0, column=2)
+        self.speed_slider.configure(
+            command=lambda v: self.speed_label.configure(text=f"{float(v):.1f}x")
         )
 
         # --- Chọn nơi lưu file ---
@@ -90,13 +102,19 @@ class TextToSpeechGoogle(ctk.CTkFrame):
         dir_path = filedialog.askdirectory()
         if not dir_path:
             return
-        self.output_path.set(os.path.join(dir_path, "speech.mp3"))
+        lang = self.language.get()
+        file_name = (
+            self.txt_file.get().split("/")[-1].replace(".txt", "")
+        )  # Bỏ đuôi .txt
+        self.output_path.set(os.path.join(dir_path, f"{file_name}_{lang}.mp3"))
+        # print("output_path:", self.output_path.get())
 
     def run_tts(self):
         text = self.textbox.get("1.0", "end").strip()
         lang = self.language.get().strip()
         out_path = self.output_path.get().strip()
-        speed_str = self.speed.get().strip()
+        # print("out_path:", out_path)
+        speed = self.speed.get()
 
         if not text:
             messagebox.showwarning(
@@ -107,19 +125,11 @@ class TextToSpeechGoogle(ctk.CTkFrame):
             messagebox.showwarning("Thiếu thông tin", "Vui lòng chọn nơi lưu file.")
             return
 
-        try:
-            speed = float(speed_str)
-            if speed <= 0:
-                raise ValueError
-        except ValueError:
-            messagebox.showwarning(
-                "Giá trị không hợp lệ", "Tốc độ phải là số lớn hơn 0."
-            )
-            return
-
         self.status.set("⏳ Đang chuyển đổi văn bản thành giọng nói...")
         threading.Thread(
-            target=self._tts_thread, args=(text, lang, speed, out_path)
+            target=self._tts_thread,
+            args=(text, lang, speed, out_path),
+            daemon=True,
         ).start()
 
     def _tts_thread(self, text, lang, speed, out_path):

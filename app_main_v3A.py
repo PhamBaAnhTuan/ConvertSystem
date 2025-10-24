@@ -3,8 +3,6 @@ from customtkinter import filedialog, CTkScrollableFrame
 import os, re, sys, pypandoc, asyncio, edge_tts, threading
 from pdf2image import convert_from_path
 
-from mp4_maker_v2 import make_video_from_slide_audio
-
 # ----------------------------------------------------------------------------------
 # KHỐI CODE XỬ LÝ POPPLER (ĐƯỢC ĐIỀU CHỈNH ĐỂ TÌM TRONG THƯ MỤC CHẠY CỦA EXE)
 # ----------------------------------------------------------------------------------
