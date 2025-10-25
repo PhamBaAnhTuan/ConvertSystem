@@ -6,7 +6,7 @@ from tkinter import filedialog, messagebox
 from gtts import gTTS
 
 
-class TextToSpeechToolV2(ctk.CTkFrame):
+class TextToSpeechTool(ctk.CTkFrame):
     def __init__(self, master=None):
         super().__init__(master)
         self.pack(fill="both", expand=True, padx=20, pady=20)
