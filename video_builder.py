@@ -11,32 +11,33 @@ class VideoBuilderTool(ctk.CTkFrame):
         super().__init__(master)
         self.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # --- Biến ---
+        # var
         self.project_dir = ctk.StringVar()
         self.audio_count = ctk.IntVar(value=0)
         self.slide_count = ctk.IntVar(value=0)
         self.total_slides = ctk.IntVar(value=0)
 
-        # --- Tiêu đề ---
+        # title
         ctk.CTkLabel(
             self,
             text="🎬 Video Builder (Audio + Images → MP4)",
             font=("Arial", 20, "bold"),
         ).pack(pady=10)
 
-        # --- Chọn thư mục project ---
-        frm = ctk.CTkFrame(self)
-        frm.pack(fill="x", pady=10)
+        # input file
+        input_frame = ctk.CTkFrame(self)
+        input_frame.pack(fill="x", pady=10)
         ctk.CTkEntry(
-            frm,
+            input_frame,
             textvariable=self.project_dir,
             placeholder_text="Chọn thư mục chứa project...",
         ).pack(side="left", padx=10, fill="x", expand=True)
-        ctk.CTkButton(frm, text="📂 Browse", command=self.select_folder).pack(
-            side="right", padx=10
+        self.input_btn = ctk.CTkButton(
+            input_frame, text="📂 Chọn thư mục", command=self.select_folder
         )
+        self.input_btn.pack(side="right", padx=10)
 
-        # --- Thông tin file ---
+        # file info
         info = ctk.CTkFrame(self)
         info.pack(fill="x", pady=5)
         ctk.CTkLabel(info, text="🎵 Audio Files:").grid(
@@ -59,35 +60,37 @@ class VideoBuilderTool(ctk.CTkFrame):
             row=1, column=1, sticky="w"
         )
 
-        # --- Nút điều khiển ---
-        btns = ctk.CTkFrame(self)
-        btns.pack(pady=10)
-        ctk.CTkButton(
-            btns, text="🔍 Kiểm tra thư mục", command=self.check_folders
-        ).pack(side="left", padx=10)
-        ctk.CTkButton(btns, text="▶️ Tạo Video MP4", command=self.run_build).pack(
-            side="left", padx=10
+        # convert btn
+        convert_btn_frame = ctk.CTkFrame(self)
+        convert_btn_frame.pack(pady=10)
+        self.check_btn = ctk.CTkButton(
+            convert_btn_frame, text="🔍 Kiểm tra thư mục", command=self.check_folders
         )
+        self.check_btn.pack(side="left", padx=10)
+        self.convert_btn = ctk.CTkButton(
+            convert_btn_frame, text="▶️ Tạo Video MP4", command=self.run_build
+        )
+        self.convert_btn.pack(side="left", padx=10)
 
-        # --- Log ---
+        # log
         self.log_box = ctk.CTkTextbox(self, height=200)
         self.log_box.pack(fill="both", expand=True, pady=10)
         self.log(
             "📢 Lưu ý, thư mục được chọn phải có 2 thư mục con là: slides/ và audio/"
         )
 
-    # ==============================
-    # 🗂️ Chọn thư mục Project
-    # ==============================
+    # -------------------------- #
     def select_folder(self):
         folder = filedialog.askdirectory(title="Chọn thư mục")
         if folder:
             self.project_dir.set(folder)
             self.log("✅ Đã chọn thư mục.")
 
-    # ==============================
-    # 📁 Kiểm tra và đếm file
-    # ==============================
+    def disable_buttons(self, state=True):
+        state_val = "disabled" if state else "normal"
+        for widget in [self.input_btn, self.check_btn, self.convert_btn]:
+            widget.configure(state=state_val)
+
     def check_folders(self):
         self.log_box.delete("1.0", "end")
         project = self.project_dir.get()
@@ -108,11 +111,14 @@ class VideoBuilderTool(ctk.CTkFrame):
         slide_files = [
             f
             for f in os.listdir(slide_dir)
-            if re.match(r"^slide[_-]\d+\.(png|jpg|jpeg)$", f, re.I)
+            # audio theo format: Slide<n>
+            if re.match(r"Slide\d+\.(png|jpg|jpeg)$", f, re.I)
+            # if re.match(r"slide[_-]\d+\.(png|jpg|jpeg)$", f, re.I)
         ]
         audio_files = [
             f
             for f in os.listdir(audio_dir)
+            # audio theo format: audio_<n>
             if re.match(r"^audio[_-]\d+\.(mp3|wav|m4a)$", f, re.I)
         ]
 
@@ -123,16 +129,17 @@ class VideoBuilderTool(ctk.CTkFrame):
         self.log(f"🖼️Slide: {len(slide_files)}, 🎵 Audio: {len(audio_files)}")
         self.log(f"🔢 Tổng số slide dự kiến: {self.total_slides.get()}")
 
-    # ==============================
-    # ▶️ Tạo Video
-    # ==============================
     def run_build(self):
         project = self.project_dir.get()
         if not os.path.isdir(project):
             messagebox.showerror(
-                "Lỗi", "Vui lòng chọn thư mục bao gồm slides/ và audio/"
+                "Lỗi", "Vui lòng chọn thư mục chứa 2 thư mục con là: slides/ và audio/"
             )
             return
+
+        self.log("⏳ Đang tạo video...")
+        self.log_box.delete("1.0", "end")
+        self.disable_buttons(True)
 
         threading.Thread(
             target=self._build_thread, args=(project,), daemon=True
@@ -140,9 +147,6 @@ class VideoBuilderTool(ctk.CTkFrame):
 
     def _build_thread(self, project):
         try:
-            self.log("⏳ Đang tạo video...")
-            self.log_box.delete("1.0", "end")
-
             slide_dir = os.path.join(project, "slides")
             audio_dir = os.path.join(project, "audio")
             output_path = os.path.join(project, "final_video.mp4")
@@ -152,7 +156,8 @@ class VideoBuilderTool(ctk.CTkFrame):
                 [
                     f
                     for f in os.listdir(slide_dir)
-                    if re.match(r"^slide[_-](\d+)\.(png|jpg|jpeg)$", f, re.I)
+                    if re.match(r"Slide\d+\.(png|jpg|jpeg)$", f, re.I)
+                    # re.match(r"^slide[_-](\d+)\.(png|jpg|jpeg)$", f, re.I)
                 ],
                 key=lambda x: int(re.findall(r"\d+", x)[0]),
             )
@@ -191,10 +196,9 @@ class VideoBuilderTool(ctk.CTkFrame):
 
         except Exception as e:
             self.log(f"❌ Lỗi: {e}")
+        finally:
+            self.disable_buttons(False)
 
-    # ==============================
-    # 🧾 Ghi log tiện dụng
-    # ==============================
     def log(self, text):
         self.log_box.insert("end", text + "\n")
         self.log_box.see("end")

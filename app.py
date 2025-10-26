@@ -5,6 +5,7 @@ from markdown_to_docx import MarkdownToDocxConverter
 from tts_google import TextToSpeechGoogle
 from tts_google_v2 import TextToSpeechTool
 from tts_pyx3 import TextToSpeechPyx3
+from audio_to_text import AudioToTextTool
 
 
 class MultiToolApp(ctk.CTk):
@@ -26,12 +27,14 @@ class MultiToolApp(ctk.CTk):
         # self.tab_text_to_speech_gg = self.tabview.add("Text → Speech Google TTS")
         self.tab_text_to_speech_pyx3 = self.tabview.add("Text → Speech Pyx3 TTS")
         self.tab_video = self.tabview.add("Image + Audio → MP4")
+        self.tab_audio_to_text = self.tabview.add("MP3, MP4 → Text")
 
         MarkdownToDocxConverter(master=self.tab_md)
         TextToSpeechTool(master=self.tab_text_to_speech)
         # TextToSpeechGoogle(master=self.tab_text_to_speech_gg)
         TextToSpeechPyx3(master=self.tab_text_to_speech_pyx3)
         VideoBuilderTool(master=self.tab_video)
+        AudioToTextTool(master=self.tab_audio_to_text)
 
 
 if __name__ == "__main__":

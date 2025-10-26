@@ -32,9 +32,10 @@ class TextToSpeechTool(ctk.CTkFrame):
             placeholder_text="Chọn file .txt...",
             placeholder_text_color="#888",
         ).pack(side="left", padx=5, fill="x", expand=True)
-        ctk.CTkButton(
+        self.input_btn = ctk.CTkButton(
             text_file_frame, text="📂 Chọn File", command=self.select_txt
-        ).pack(side="right", padx=10)
+        )
+        self.input_btn.pack(side="right", padx=10)
 
         # --- Chọn thư mục output ---
         output_file_frame = ctk.CTkFrame(self)
@@ -46,9 +47,10 @@ class TextToSpeechTool(ctk.CTkFrame):
             placeholder_text="Chọn hoặc tạo thư mục audio...",
             placeholder_text_color="#888",
         ).pack(side="left", padx=5, fill="x", expand=True)
-        ctk.CTkButton(
+        self.output_btn = ctk.CTkButton(
             output_file_frame, text="📂 Chọn thư mục", command=self.select_output
-        ).pack(side="right", padx=10)
+        )
+        self.output_btn.pack(side="right", padx=10)
 
         # --- Frame chứa ngôn ngữ và tốc độ ---
         lang_n_speed_frame = ctk.CTkFrame(self)
@@ -101,12 +103,10 @@ class TextToSpeechTool(ctk.CTkFrame):
         )
 
         # --- Nút thực thi ---
-        ctk.CTkButton(self, text="▶️ Tạo Audio", command=self.run_tts).pack(pady=10)
-        # ctk.CTkLabel(self, textvariable=self.status, text_color="gray").pack(pady=5)
+        self.convert_btn = ctk.CTkButton(self, text="▶️ Tạo Audio", command=self.run_tts)
+        self.convert_btn.pack(pady=10)
 
-    # ==============================
-    # 🗂️ Chọn file và thư mục
-    # ==============================
+    # ============================== #
     def select_txt(self):
         path = filedialog.askopenfilename(
             title="Chọn file TXT", filetypes=[("Text Files", "*.txt")]
@@ -126,9 +126,11 @@ class TextToSpeechTool(ctk.CTkFrame):
             self.output_dir.set(folder)
             self.log("✅ Đã chọn thư mục lưu.")
 
-    # ==============================
-    # ▶️ Chạy TTS
-    # ==============================
+    def disable_buttons(self, state=True):
+        state_val = "disabled" if state else "normal"
+        for widget in [self.input_btn, self.output_btn, self.convert_btn]:
+            widget.configure(state=state_val)
+
     def run_tts(self):
         txt_path = self.txt_path.get()
         if not os.path.isfile(txt_path):
@@ -141,19 +143,18 @@ class TextToSpeechTool(ctk.CTkFrame):
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
 
+        self.log("⏳ Đang xử lý file...")
+        self.log_box.delete("1.0", "end")
+        self.disable_buttons(True)
+
         threading.Thread(
             target=self._tts_thread,
             args=(txt_path, out_dir, self.lang.get(), self.speed.get()),
             daemon=True,
         ).start()
 
-    # ==============================
-    # 🧠 Luồng tạo audio
-    # ==============================
     def _tts_thread(self, txt_path, out_dir, lang, speed):
         try:
-            self.log("⏳ Đang xử lý file...")
-            self.log_box.delete("1.0", "end")
 
             with open(txt_path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -198,10 +199,9 @@ class TextToSpeechTool(ctk.CTkFrame):
 
         except Exception as e:
             self.log(f"❌ Lỗi: {e}")
+        finally:
+            self.disable_buttons(False)
 
-    # ==============================
-    # 📜 Ghi log ra UI
-    # ==============================
     def log(self, text):
         self.log_box.insert("end", text + "\n")
         self.log_box.see("end")

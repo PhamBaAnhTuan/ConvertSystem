@@ -32,9 +32,10 @@ class MarkdownToDocxConverter(ctk.CTkFrame):
             placeholder_text="Chọn file .md...",
             placeholder_text_color="#888",
         ).pack(side="left", padx=5, fill="x", expand=True)
-        ctk.CTkButton(
+        self.input_btn = ctk.CTkButton(
             md_file_frame, text="📂 Chọn File", command=self.select_md_file
-        ).pack(side="right", padx=10)
+        )
+        self.input_btn.pack(side="right", padx=10)
 
         # --- File DOCX Output ---
         docx_file_frame = ctk.CTkFrame(self)
@@ -47,19 +48,20 @@ class MarkdownToDocxConverter(ctk.CTkFrame):
             placeholder_text="Đường dẫn file .docx xuất ra...",
             placeholder_text_color="#888",
         ).pack(side="left", padx=5, fill="x", expand=True)
-        ctk.CTkButton(
+        self.output_btn = ctk.CTkButton(
             docx_file_frame, text="💾 Chọn thư mục", command=self.select_docx_file
-        ).pack(side="right", padx=10)
+        )
+        self.output_btn.pack(side="right", padx=10)
 
         # --- Log box ---
         self.log_box = ctk.CTkTextbox(self, height=100)
-        self.log_box.pack(fill="both", expand=True, pady=10)
+        self.log_box.pack(fill="both", pady=10)
 
         # --- Nút chạy ---
-        ctk.CTkButton(self, text="▶️ Chuyển Đổi", command=self.run_convert).pack(pady=10)
-
-        # --- Trạng thái ---
-        # ctk.CTkLabel(self, textvariable=self.status, text_color="gray").pack(pady=5)
+        self.convert_btn = ctk.CTkButton(
+            self, text="▶️ Chuyển Đổi", command=self.run_convert
+        )
+        self.convert_btn.pack(pady=10)
 
     # --- Hàm chọn file ---
     def select_md_file(self):
@@ -77,6 +79,11 @@ class MarkdownToDocxConverter(ctk.CTkFrame):
         if path:
             self.docx_output.set(path)
             self.log("✅ Đã chọn thư mục lưu file docx")
+
+    def disable_buttons(self, state=True):
+        state_val = "disabled" if state else "normal"
+        for widget in [self.input_btn, self.output_btn, self.convert_btn]:
+            widget.configure(state=state_val)
 
     # --- Hàm xử lý chính ---
     def run_convert(self):

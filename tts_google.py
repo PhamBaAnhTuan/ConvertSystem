@@ -6,8 +6,6 @@ from gtts import gTTS
 
 
 class TextToSpeechGoogle(ctk.CTkFrame):
-    """Component: Chuyển đổi văn bản hoặc file .txt thành giọng nói (MP3)"""
-
     def __init__(self, master=None):
         super().__init__(master)
         self.pack(fill="both", expand=True, padx=20, pady=20)

@@ -6,7 +6,6 @@ from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
 import re
 
 
-# ====== Hàm xử lý logic video ======
 def extract_number(filename):
     match = re.search(r"(\d+)", filename)
     return int(match.group(1)) if match else None
@@ -72,7 +71,6 @@ def make_video_from_slide_audio(base_dir, log_callback, fps=24):
     messagebox.showinfo("Hoàn tất", f"🎉 Video tổng đã được tạo:\n{out_path}")
 
 
-# ====== Giao diện GUI ======
 class VideoApp(ctk.CTk):
     def __init__(self):
         super().__init__()
